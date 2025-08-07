@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 # Standard
+import os
 import socket
 import threading
 import time
@@ -22,7 +23,8 @@ class LMCacheServer:
         self.port = port
         # self.data_store = {}
         self.data_store = CreateStorageBackend(device)
-        self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        protocol = socket.AF_INET6 if os.getenv('LM_USE_IPV6', '') == "1" else socket.AF_INET
+        self.server_socket = socket.socket(protocol, socket.SOCK_STREAM)
         self.server_socket.bind((host, port))
         self.server_socket.listen()
 

@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 # Standard
+import os
 from typing import TYPE_CHECKING, Literal, Optional
 import socket
 
@@ -60,10 +61,12 @@ def get_ip():
     """
     Get the local IP address of the machine.
     """
-    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    protocol = socket.AF_INET6 if os.getenv('LM_USE_IPV6', '') == "1" else socket.AF_INET
+    public_ip = "2001:4860:4860::8888" if os.getenv('LM_USE_IPV6', '') == "1" else "8.8.8.8"
+    s = socket.socket(protocol, socket.SOCK_DGRAM)
     try:
         # "Connect" to a public IP — just to determine local IP
-        s.connect(("8.8.8.8", 80))
+        s.connect((public_ip, 80))
         return s.getsockname()[0]
     except Exception:
         logger.warning(

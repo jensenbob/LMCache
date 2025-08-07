@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 # Standard
+import os
 from typing import List, Optional, no_type_check
 import asyncio
 import socket
@@ -36,7 +37,8 @@ class LMCServerConnector(RemoteConnector):
         # However, we use socket here as we need to use the socket.recv_into()
         # to reduce memory copy.
 
-        self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        protocol = socket.AF_INET6 if os.getenv('LM_USE_IPV6', '') == "1" else socket.AF_INET
+        self.client_socket = socket.socket(protocol, socket.SOCK_STREAM)
         self.client_socket.connect((host, port))
         # loop.sock_recv_into(sock, buf)
 

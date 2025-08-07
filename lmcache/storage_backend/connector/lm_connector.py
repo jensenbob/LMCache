@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 # Standard
+import os
 from typing import List, Optional
 import socket
 import threading
@@ -19,7 +20,8 @@ logger = init_logger(__name__)
 # for communication + deserialization
 class LMCServerConnector(RemoteBytesConnector):
     def __init__(self, host, port):
-        self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        protocol = socket.AF_INET6 if os.getenv('LM_USE_IPV6', '') == "1" else socket.AF_INET
+        self.client_socket = socket.socket(protocol, socket.SOCK_STREAM)
         self.client_socket.connect((host, port))
         self.socket_lock = threading.Lock()
 

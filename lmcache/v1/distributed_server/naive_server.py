@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 # Standard
+import os
 from typing import Optional
 import asyncio
 import ctypes
@@ -224,7 +225,8 @@ class NaiveDistributedServer(DistributedServerInterface):
         # connection for 100 times.
         # However, too many live sockets could cause file descriptor exhaustion
         # (i.e., Too many open files).
-        client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        protocol = socket.AF_INET6 if os.getenv('LM_USE_IPV6', '') == "1" else socket.AF_INET
+        client_socket = socket.socket(protocol, socket.SOCK_STREAM)
         client_socket.connect((host, port))
         logger.debug(f"Peer connection created at {host}:{port}")
 
@@ -273,7 +275,8 @@ class NaiveDistributedServer(DistributedServerInterface):
         # connection for 100 times.
         # However, too many live sockets could cause file descriptor exhaustion
         # (i.e., Too many open files).
-        client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        protocol = socket.AF_INET6 if os.getenv('LM_USE_IPV6', '') == "1" else socket.AF_INET
+        client_socket = socket.socket(protocol, socket.SOCK_STREAM)
         client_socket.setblocking(False)
 
         await self.loop.sock_connect(client_socket, (host, port))
