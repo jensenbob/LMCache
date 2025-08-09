@@ -22,6 +22,7 @@ from lmcache.v1.lookup_server import LookupServerInterface
 from lmcache.v1.memory_management import MemoryFormat, MemoryObj
 from lmcache.v1.protocol import ClientMetaMessage, Constants, ServerMetaMessage
 from lmcache.v1.storage_backend.storage_manager import StorageManager
+from lmcache.v1.tools import parse_ipv6_with_port
 
 logger = init_logger(__name__)
 
@@ -53,7 +54,7 @@ class NaiveDistributedServer(DistributedServerInterface):
 
         self.url = config.distributed_url
         assert self.url is not None
-        host, port = self.url.split(":")
+        host, port = parse_ipv6_with_port(self.url) if os.getenv("LM_USE_IPV6") == 1 else self.url.split(":")
         self.host = host
         self.port = int(port)
 
