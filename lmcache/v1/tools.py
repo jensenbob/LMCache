@@ -1,3 +1,4 @@
+import re
 from typing import Sequence, Tuple
 
 from lmcache.utils import CacheEngineKey
@@ -44,3 +45,28 @@ def distribute_tuple_list(
         start = end
 
     return result
+
+
+def parse_ipv6_with_port(ipv6_str:str) -> Tuple[str, int]:
+    """
+    parse IPv6 addresses and ports
+
+    :param str ipv6_str: The IPv6 address to parse
+
+    :return: A tuple containing the parsed IPv6 address and the parsed port.
+
+    :raises ValueError: If the IPv6 address is not a valid IPv6 address.
+    """
+    pattern = r'^\[(.*)\]:(\d+)$'
+    match = re.match(pattern, ipv6_str)
+
+    if not match:
+        raise ValueError(f"illegal ipv6 format: {ipv6_str}")
+
+    ipv6_address = match.group(1)
+    port = match.group(2)
+
+    if not port.isdigit() or not (0 <= int(port) <= 65535):
+        raise ValueError(f"illegal port: {port}")
+
+    return ipv6_address, int(port)
