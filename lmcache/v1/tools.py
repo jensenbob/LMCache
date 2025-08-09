@@ -1,3 +1,4 @@
+import os
 import re
 from typing import Sequence, Tuple
 
@@ -47,21 +48,26 @@ def distribute_tuple_list(
     return result
 
 
-def parse_ipv6_with_port(ipv6_str:str) -> Tuple[str, int]:
+def parse_ip_port(ip_address:str) -> Tuple[str, int]:
     """
-    parse IPv6 addresses and ports
+    parse addresses and ports
 
-    :param str ipv6_str: The IPv6 address to parse
+    :param str ip_address: The address to parse
 
-    :return: A tuple containing the parsed IPv6 address and the parsed port.
+    :return: A tuple containing the parsed address and the parsed port.
 
-    :raises ValueError: If the IPv6 address is not a valid IPv6 address.
+    :raises ValueError: If the port is not a valid port number.
     """
+    if os.getenv('LM_USE_IPV6', '') != "1":
+        ipv4_address, port = ip_address.split(":")
+        logger.debug(f"parse ipaddress under ipv4 protocol, {ipv4_address}:{port}")
+        return ipv4_address, int(port)
+
     pattern = r'^\[(.*)\]:(\d+)$'
-    match = re.match(pattern, ipv6_str)
+    match = re.match(pattern, ip_address)
 
     if not match:
-        raise ValueError(f"illegal ipv6 format: {ipv6_str}")
+        raise ValueError(f"illegal ipv6 format: {ip_address}")
 
     ipv6_address = match.group(1)
     port = match.group(2)
@@ -69,4 +75,5 @@ def parse_ipv6_with_port(ipv6_str:str) -> Tuple[str, int]:
     if not port.isdigit() or not (0 <= int(port) <= 65535):
         raise ValueError(f"illegal port: {port}")
 
+    logger.debug(f"parse ipaddress under ipv6 protocol, {ipv6_address}:{port}")
     return ipv6_address, int(port)

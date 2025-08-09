@@ -13,7 +13,7 @@ from lmcache.logging import init_logger
 from lmcache.utils import CacheEngineKey
 from lmcache.v1.config import LMCacheEngineConfig
 from lmcache.v1.lookup_server.abstract_server import LookupServerInterface  # noqa: E501
-from lmcache.v1.tools import parse_ipv6_with_port
+from lmcache.v1.tools import parse_ip_port
 
 logger = init_logger(__name__)
 
@@ -28,14 +28,14 @@ class RedisLookupServer(LookupServerInterface):
         self.url = config.lookup_url
         assert self.url is not None
 
-        host, port = parse_ipv6_with_port(self.url) if os.getenv('LM_USE_IPV6', '') == "1" else self.url.split(":")
+        host, port = parse_ip_port(self.url)
         self.host = host
         self.port = int(port)
 
         self.connection = redis.Redis(
             host=self.host, port=self.port, decode_responses=True
         )
-        logger.info(f"Connected to Redis lookup server at {host}:{port}")
+        logger.info(f"Connected to Redis lookup server at [{host}]:{port}")
         # decode_responses=False)
 
     def lookup(self, key: CacheEngineKey) -> Optional[Tuple[str, int]]:
