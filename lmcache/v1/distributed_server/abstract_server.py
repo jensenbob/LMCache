@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 # Standard
-from typing import Optional
+from typing import Optional, Sequence
 import abc
 
 # First Party
@@ -46,6 +46,19 @@ class DistributedServerInterface(metaclass=abc.ABCMeta):
         memory_objs: list[MemoryObj],
         dst_url: str,
         dst_location: Optional[str] = None,
+    ) -> bool:
+        """
+        Perform batched put to the peer.
+        """
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    async def batched_issue_sync(
+            self,
+            keys: Sequence[CacheEngineKey],
+            memory_objs: list[MemoryObj],
+            dst_url: str,
+            dst_location: Optional[str] = None,
     ) -> bool:
         """
         Perform batched put to the peer.

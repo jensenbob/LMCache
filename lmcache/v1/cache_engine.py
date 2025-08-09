@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # Standard
 from collections import defaultdict
-from typing import Dict, Generator, List, Optional, Tuple, Union
+from typing import Dict, Generator, List, Optional, Tuple, Union, Sequence
 import asyncio
 import gc
 import multiprocessing
@@ -42,6 +42,7 @@ from lmcache.v1.token_database import (
     SegmentTokenDatabase,
     TokenDatabase,
 )
+from lmcache.v1.tools import distribute_tuple_list
 
 logger = init_logger(__name__)
 
@@ -253,19 +254,25 @@ class LMCacheEngine:
 
         if self.lookup_server is not None:
             self.lookup_server.batched_insert(keys)
+            peers = self.lookup_server.active_peers()
+            for keys_memory_objs_tuple_list, peer in distribute_tuple_list(list(zip(keys, memory_objs)), peers):
+                keys_tuple, memory_objs_tuple = zip(*keys_memory_objs_tuple_list)
+                keys = list(keys_tuple)
+                memory_objs = list(memory_objs_tuple)
+                self.distributed_server.batched_issue_sync(keys, memory_objs, peer, "LocalCPUBackend")
+                logger.info("send %d keys and %d memory_objs to peer %s", len(keys), len(memory_objs), peer)
 
         logger.info(
             "Stored %d out of total %d tokens. size: %.4f gb, cost %.4f ms, "
             "throughput: %.4f GB/s; offload_time: %.4f ms, put_time: %.4f ms",
             tot_token_num,
             num_to_store_tokens,
-            tot_kv_size / 1024**3,
+            tot_kv_size / 1024 ** 3,
             tot_time * 1000,
-            tot_kv_size / tot_time / 1024**3,
+            tot_kv_size / tot_time / 1024 ** 3,
             offload_time * 1000,
             put_time * 1000,
         )
-
         self.stats_monitor.on_store_finished(monitor_req_id, tot_token_num)
 
     @_lmcache_nvtx_annotate

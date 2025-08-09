@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # Standard
 import os
-from typing import Optional
+from typing import Optional, Sequence
 import asyncio
 import ctypes
 import socket
@@ -215,6 +215,7 @@ class NaiveDistributedServer(DistributedServerInterface):
         )
 
         # `url` has the format host:port
+        logger.debug(f"Trying to connect to lookup server at {self.host}:{self.port}")
         host_and_port = self.lookup_server.lookup(key)
         if host_and_port is None:
             return None
@@ -255,7 +256,7 @@ class NaiveDistributedServer(DistributedServerInterface):
 
     async def batched_issue_put(
         self,
-        keys: CacheEngineKey,
+        keys: CacheEngineKey,  # TODO keys should be a list, like list[CacheEngineKey]
         memory_objs: list[MemoryObj],
         dst_url: str,
         dst_location: Optional[str] = None,
@@ -281,6 +282,61 @@ class NaiveDistributedServer(DistributedServerInterface):
 
         await self.loop.sock_connect(client_socket, (host, port))
         logger.debug(f"Peer connection created at {host}:{port}")
+
+        for key, memory_obj in zip(keys, memory_objs, strict=False):
+            await self.loop.sock_sendall(
+                client_socket,
+                ClientMetaMessage(
+                    Constants.CLIENT_PUT,
+                    key,
+                    memory_obj.get_physical_size(),
+                    memory_obj.get_memory_format(),
+                    memory_obj.get_dtype(),
+                    memory_obj.get_shape(),
+                    dst_location,
+                ).serialize(),
+            )
+
+            data = await self.loop.sock_recv(
+                client_socket, ServerMetaMessage.packlength()
+            )
+
+            meta = ServerMetaMessage.deserialize(data)
+            if meta.code != Constants.SERVER_SUCCESS:
+                return False
+
+            await self.loop.sock_sendall(client_socket, memory_obj.byte_array)
+
+        return True
+
+    async def batched_issue_sync(
+        self,
+        keys: Sequence[CacheEngineKey],
+        memory_objs: list[MemoryObj],
+        dst_url: str,
+        dst_location: Optional[str] = None,
+    ) -> bool:
+        """
+        synchronize keys to the peer.
+        This function can be blocking for now.
+        """
+        # `dst_url` has the format host:port
+        host, port = dst_url.split(":")
+        port = int(port)
+
+        logger.debug(f"[batched_issue_sync] Trying to connect to peer {host}:{port}")
+
+        # TODO(Jiayi): Cache the hot client sockets if possible.
+        # For example, retrieving 100 chunks could create 100 the same
+        # connection for 100 times.
+        # However, too many live sockets could cause file descriptor exhaustion
+        # (i.e., Too many open files).
+        protocol = socket.AF_INET6 if os.getenv('LM_USE_IPV6', '') == "1" else socket.AF_INET
+        client_socket = socket.socket(protocol, socket.SOCK_STREAM)
+        client_socket.setblocking(False)
+
+        await self.loop.sock_connect(client_socket, (host, port))
+        logger.debug(f"[batched_issue_sync] Peer connection created at {host}:{port}")
 
         for key, memory_obj in zip(keys, memory_objs, strict=False):
             await self.loop.sock_sendall(

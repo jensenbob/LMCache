@@ -143,6 +143,7 @@ class LMCacheConnector:
         assert isinstance(token_ids, torch.Tensor)
         assert isinstance(slot_mapping, torch.Tensor)
         assert len(token_ids) == len(slot_mapping)
+        logger.debug(f"SGLang begin Storing {len(token_ids)} tokens")
 
         slot_mapping = slot_mapping.cuda()
         store_mask = torch.ones_like(token_ids, dtype=torch.bool)

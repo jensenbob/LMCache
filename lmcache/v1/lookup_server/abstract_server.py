@@ -54,3 +54,10 @@ class LookupServerInterface(metaclass=abc.ABCMeta):
         Perform batched remove in the lookup server.
         """
         raise NotImplementedError
+
+    @abc.abstractmethod
+    def active_peers(self) -> Sequence[str]:
+       """
+       Perform active_peers in the lookup server.
+       """
+       raise NotImplementedError
