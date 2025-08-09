@@ -93,6 +93,7 @@ class LMCacheEngine:
         self.lookup_server: Optional[LookupServerInterface] = None
         if self.enable_p2p:
             self.lookup_server = RedisLookupServer(config)
+            self.lookup_server.active_peers()
 
         # avoid circular import
         # First Party
@@ -247,6 +248,7 @@ class LMCacheEngine:
         t = time.perf_counter()
 
         transfer_spec = kwargs.get("transfer_spec", None)
+        # store
         self.storage_manager.batched_put(keys, memory_objs, transfer_spec=transfer_spec)
         put_time += time.perf_counter() - t
 
@@ -467,7 +469,7 @@ class LMCacheEngine:
                 ret_mask[start:end] = True
 
             assert location is not None
-
+            logger.debug(f"Retrieving {key} from {location}")
             block_mapping[location].append((key, start, end))
 
         # TODO(Jiayi): We can parallelize the retrieval from

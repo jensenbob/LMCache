@@ -58,7 +58,7 @@ class RedisLookupServer(LookupServerInterface):
         assert self.distributed_url is not None
         logger.debug("Call to insert in lookup server")
         self.connection.set(key.to_string(), self.distributed_url)
-        self.connection.zadd(ACTIVE_PEERS, {self.distributed_url: int(time.time())})
+        self.heartbeat()
 
     def batched_insert(self, keys: Sequence[CacheEngineKey]):
         """
@@ -70,7 +70,7 @@ class RedisLookupServer(LookupServerInterface):
         # TODO(Jiayi): Optimize this with redis pipe
         for key in keys:
             self.connection.set(key.to_string(), self.distributed_url)
-        self.connection.zadd(ACTIVE_PEERS, {self.distributed_url: int(time.time())})
+        self.heartbeat()
 
     def remove(self, key: CacheEngineKey):
         """
@@ -78,7 +78,7 @@ class RedisLookupServer(LookupServerInterface):
         """
         logger.debug("Call to remove in lookup server")
         self.connection.delete(key.to_string())
-        self.connection.zadd(ACTIVE_PEERS, {self.distributed_url: int(time.time())})
+        self.heartbeat()
 
     def batched_remove(self, keys: Sequence[CacheEngineKey]):
         """
@@ -88,7 +88,14 @@ class RedisLookupServer(LookupServerInterface):
         # TODO(Jiayi): We might need to cache the `str_keys` for performance.
         str_keys = [key.to_string() for key in keys]
         self.connection.delete(*str_keys)
+        self.heartbeat()
+
+    def heartbeat(self):
+        """
+        Perform update heartbeat for current pod.
+        """
         self.connection.zadd(ACTIVE_PEERS, {self.distributed_url: int(time.time())})
+        logger.debug(f"Heartbeat for {ACTIVE_PEERS} in lookup server")
 
     def active_peers(self) -> Sequence[str]:
         """
@@ -107,5 +114,11 @@ class RedisLookupServer(LookupServerInterface):
         # TODO: Optimize this with redis pipe and asyncio
         if len(invalid_peers) > 0:
             self.connection.zrem(ACTIVE_PEERS, invalid_peers)
+
+        if self.distributed_url not in valid_peers:
+            logger.error(f"Self url {self.distributed_url} not in active peers")
+            return []
+
         logger.debug(f"Valid peers: {valid_peers}")
+        valid_peers.remove(self.distributed_url)
         return valid_peers

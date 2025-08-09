@@ -216,7 +216,7 @@ class NaiveDistributedServer(DistributedServerInterface):
         )
 
         # `url` has the format host:port
-        logger.debug(f"Trying to connect to lookup server at {self.host}:{self.port}")
+        logger.debug(f"Trying to connect to lookup server at {self.host}:{self.port} to find key {key}")
         host_and_port = self.lookup_server.lookup(key)
         if host_and_port is None:
             return None

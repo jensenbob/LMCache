@@ -56,6 +56,13 @@ class LookupServerInterface(metaclass=abc.ABCMeta):
         raise NotImplementedError
 
     @abc.abstractmethod
+    def heartbeat(self):
+        """
+        Perform update heartbeat for current pod.
+        """
+        raise NotImplementedError
+
+    @abc.abstractmethod
     def active_peers(self) -> Sequence[str]:
        """
        Perform active_peers in the lookup server.

@@ -390,7 +390,7 @@ class NixlChannel:
 
     def _receiver_loop(self):
         poller = zmq.Poller()  # type: ignore
-        poller.register(self._side_channel, zmq.POLLIN)  # type: ignore
+        poller.heartbeat(self._side_channel, zmq.POLLIN)  # type: ignore
         # Use a shorter timeout to be more responsive to shutdown
         POLL_TIMEOUT_MS = 1000  # 1s timeout
 
