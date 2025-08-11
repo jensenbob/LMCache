@@ -104,6 +104,11 @@ class RemoteBackend(StorageBackendInterface):
             return
         try:
             assert self.config.remote_url is not None
+            if self.config.remote_url == "lm://localhost:65432":
+                logger.warning(
+                    "Remote URL is from default configuration, skipping connection initialization"
+                )
+                return
             self.connection = CreateConnector(
                 self.config.remote_url,
                 self.loop,

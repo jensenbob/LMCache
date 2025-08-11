@@ -17,7 +17,8 @@ from lmcache.v1.tools import parse_ip_port
 
 logger = init_logger(__name__)
 
-ACTIVE_PEERS = "ACTIVE_PEERS"
+ACTIVE_PEERS = "LOCAL_MODEL:LMCACHE:P2P:ACTIVE_PEERS"
+MAX_HEARTBEAT_DELAY = 60  # seconds
 
 # TODO (Jiayi): Batching is needed for Redis lookup server.
 class RedisLookupServer(LookupServerInterface):
@@ -43,12 +44,34 @@ class RedisLookupServer(LookupServerInterface):
         Perform lookup in the lookup server.
         """
         logger.debug("Call to lookup in lookup server")
-        url = self.connection.get(key.to_string())
-        logger.debug(f"KV cache lives on {url}")
-        assert not inspect.isawaitable(url)
+        lua_script = """
+           local cache_engine_key = KEYS[1]
+           local active_peers_key = KEYS[2]
+           local now = ARGV[1]
+           local max_delay = ARGV[2]
+           local url = redis.call('GET', cache_engine_key)
+           if url == nil then
+               return nil, nil
+           end
+           local score = redis.call('ZSCORE', active_peers_key, url)
+           if now - score > max_delay then
+               redis.call('zrem', active_peers_key, url)
+               return nil, nil
+           end
+           return url, score
+           """
+        url, score = self.connection.execute_script(lua_script, key.to_string(), ACTIVE_PEERS, int(time.time()), MAX_HEARTBEAT_DELAY)
+        logger.debug(f"Redis lus executed. url:{url}, score:{score}")
         if url is None:
             return None
-        host, port = url.split(":")
+        if url == self.distributed_url:
+            logger.debug(f"Shouldn't find on itself, target_url:{url}, key:{key.to_string()}")
+            return None
+
+        assert not inspect.isawaitable(url)
+
+        logger.debug(f"Key{key} lives on peers{url}")
+        host, port = parse_ip_port(url)
         return host, int(port)
 
     def insert(self, key: CacheEngineKey):
@@ -95,30 +118,45 @@ class RedisLookupServer(LookupServerInterface):
         Perform update heartbeat for current pod.
         """
         self.connection.zadd(ACTIVE_PEERS, {self.distributed_url: int(time.time())})
-        logger.debug(f"Heartbeat for {ACTIVE_PEERS} in lookup server")
+        logger.debug(f"Heartbeat from {self.distributed_url} for {ACTIVE_PEERS} in lookup server")
 
     def active_peers(self) -> Sequence[str]:
         """
         Perform active_peers in the lookup server.
         """
         logger.debug("Call to active_peers in lookup server")
-        peers = self.connection.zrange("rank", 0, -1, withscores=True)
-        valid_peers = []
-        invalid_peers = []
-        for peer, heartbeat in peers:
-            if time.time() - heartbeat > 60:  # delete expired peers
-                invalid_peers.append(peer)
-            else:
-                valid_peers.append(peer)
 
-        # TODO: Optimize this with redis pipe and asyncio
-        if len(invalid_peers) > 0:
-            self.connection.zrem(ACTIVE_PEERS, invalid_peers)
+        lua_script = """
+            local key = KEYS[1]
+            local now = ARGV[1]
+            local max_delay = ARGV[2]
+            
+            local all_entries = redis.call('ZRANGE', key, 0, -1, 'WITHSCORES')
+            local inactive_peers = {}
+            local active_peers = {}
 
-        if self.distributed_url not in valid_peers:
+            for i = 1, #all_entries, 2 do
+                local member = all_entries[i]
+                local last_heartbeat = tonumber(all_entries[i+1])
+
+                if now - last_heartbeat > max_delay then
+                    table.insert(inactive_peers, member)
+                else
+                    table.insert(active_peers, member)
+                end
+            end
+
+            if #inactive_peers > 0 then
+                redis.call('ZREM', key, unpack(inactive_peers))
+            end
+
+            return active_peers
+            """
+        active_peers = self.connection.execute_script(lua_script, ACTIVE_PEERS, int(time.time()), MAX_HEARTBEAT_DELAY)
+        if self.distributed_url not in active_peers:
             logger.error(f"Self url {self.distributed_url} not in active peers")
             return []
 
-        logger.debug(f"Valid peers: {valid_peers}")
-        valid_peers.remove(self.distributed_url)
-        return valid_peers
+        logger.debug(f"Valid peers: {active_peers}")
+        active_peers.remove(self.distributed_url)
+        return active_peers
