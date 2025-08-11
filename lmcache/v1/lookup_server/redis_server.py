@@ -18,7 +18,7 @@ from lmcache.v1.tools import parse_ip_port
 
 logger = init_logger(__name__)
 
-ACTIVE_PEERS = "LOCAL_MODEL:LMCACHE:P2P:ACTIVE_PEERS"
+ACTIVE_PEERS = "LOCAL_MODEL-LMCACHE-P2P-ACTIVE_PEERS"
 MAX_HEARTBEAT_DELAY = 60  # seconds
 
 def background_heartbeat():
@@ -82,8 +82,11 @@ class RedisLookupServer(LookupServerInterface):
         
         return {url, score}
         """
-        url, score = self.connection.eval(lua_script, 2, key.to_string(), ACTIVE_PEERS, str(int(time.time())), str(MAX_HEARTBEAT_DELAY))
-        logger.debug(f"Redis lus executed. url:{url}, score:{score}")
+        ret = self.connection.eval(lua_script, 2, key.to_string(), ACTIVE_PEERS, str(int(time.time())), str(MAX_HEARTBEAT_DELAY))
+        logger.debug(f"Redis lus executed. ret:{ret}")
+        if len(ret) == 0:
+            return None
+        url = ret[0]
         if url is None:
             return None
         if url == self.distributed_url:
