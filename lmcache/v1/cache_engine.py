@@ -159,7 +159,7 @@ class LMCacheEngine:
             self.post_inited = True
 
     def report_heartbeat(self):
-        schedule.every(5).seconds.do(self.lookup_server.heartbeat())
+        schedule.every(5).seconds.do(self.lookup_server.heartbeat)
 
     @_lmcache_nvtx_annotate
     @torch.inference_mode()
