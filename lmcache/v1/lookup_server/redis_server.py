@@ -58,22 +58,31 @@ class RedisLookupServer(LookupServerInterface):
         Perform lookup in the lookup server.
         """
         lua_script = """
-           local cache_engine_key = KEYS[1]
-           local active_peers_key = KEYS[2]
-           local now = ARGV[1]
-           local max_delay = ARGV[2]
-           local url = redis.call('GET', cache_engine_key)
-           if url == nil then
-               return nil, nil
-           end
-           local score = redis.call('ZSCORE', active_peers_key, url)
-           if now - score > max_delay then
-               redis.call('zrem', active_peers_key, url)
-               return nil, nil
-           end
-           return url, score
-           """
-        url, score = self.connection.eval(lua_script, 2, key.to_string(), ACTIVE_PEERS, int(time.time()), MAX_HEARTBEAT_DELAY)
+        local cache_engine_key = KEYS[1]
+        local active_peers_key = KEYS[2]
+        local now = ARGV[1]
+        local max_delay = ARGV[2]
+        
+        local url = redis.call('GET', cache_engine_key)
+        if not url
+        then
+            return {nil, nil}
+        end
+        
+        local score = redis.call('ZSCORE', active_peers_key, url)
+        if not score
+        then
+            return {nil, nil}
+        end
+        
+        if tonumber(now) - tonumber(score) > tonumber(max_delay) then
+            redis.call('ZREM', active_peers_key, url)
+            return {nil, nil}
+        end
+        
+        return {url, score}
+        """
+        url, score = self.connection.eval(lua_script, 2, key.to_string(), ACTIVE_PEERS, str(int(time.time())), str(MAX_HEARTBEAT_DELAY))
         logger.debug(f"Redis lus executed. url:{url}, score:{score}")
         if url is None:
             return None
@@ -137,39 +146,33 @@ class RedisLookupServer(LookupServerInterface):
         """
         Perform active_peers in the lookup server.
         """
-        logger.debug("Call to active_peers in lookup server")
-
         lua_script = """
-            local key = KEYS[1]
-            local now = ARGV[1]
-            local max_delay = ARGV[2]
-            
-            local all_entries = redis.call('ZRANGE', key, 0, -1, 'WITHSCORES')
-            local inactive_peers = {}
-            local active_peers = {}
+        local key = KEYS[1]
+        local now = ARGV[1]
+        local max_delay = ARGV[2]
 
-            for i = 1, #all_entries, 2 do
-                local member = all_entries[i]
-                local last_heartbeat = tonumber(all_entries[i+1])
+        local all_entries = redis.call('ZRANGE', key, 0, -1, 'WITHSCORES')
+        local inactive_peers = {}
+        local active_peers = {}
 
-                if now - last_heartbeat > max_delay then
-                    table.insert(inactive_peers, member)
-                else
-                    table.insert(active_peers, member)
-                end
+        for i = 1, #all_entries, 2 do
+            local member = all_entries[i]
+            local last_heartbeat = tonumber(all_entries[i+1])
+            if tonumber(now) - tonumber(last_heartbeat) > tonumber(max_delay) then
+                table.insert(inactive_peers, member)
+            else
+                table.insert(active_peers, member)
             end
+        end
+        
+        if #inactive_peers > 0 then
+            redis.call('ZREM', key, unpack(inactive_peers))
+        end
 
-            if #inactive_peers > 0 then
-                redis.call('ZREM', key, unpack(inactive_peers))
-            end
+        return active_peers
+        """
+        active_peers = self.connection.eval(lua_script, 1, ACTIVE_PEERS, str(int(time.time())), str(MAX_HEARTBEAT_DELAY))
+        logger.debug(f"active_peers from cache: {active_peers}")
 
-            return active_peers
-            """
-        active_peers = self.connection.eval(lua_script, 1, ACTIVE_PEERS, int(time.time()), MAX_HEARTBEAT_DELAY)
-        if self.distributed_url not in active_peers:
-            logger.error(f"Self url {self.distributed_url} not in active peers")
-            return []
-
-        logger.debug(f"Valid peers: {active_peers}")
-        active_peers.remove(self.distributed_url)
+        active_peers.remove(self.distributed_url) if self.distributed_url in active_peers else None
         return active_peers
