@@ -57,7 +57,6 @@ class RedisLookupServer(LookupServerInterface):
         """
         Perform lookup in the lookup server.
         """
-        logger.debug("Call to lookup in lookup server")
         lua_script = """
            local cache_engine_key = KEYS[1]
            local active_peers_key = KEYS[2]
@@ -74,7 +73,7 @@ class RedisLookupServer(LookupServerInterface):
            end
            return url, score
            """
-        url, score = self.connection.eval(lua_script, key.to_string(), ACTIVE_PEERS, int(time.time()), MAX_HEARTBEAT_DELAY)
+        url, score = self.connection.eval(lua_script, 2, key.to_string(), ACTIVE_PEERS, int(time.time()), MAX_HEARTBEAT_DELAY)
         logger.debug(f"Redis lus executed. url:{url}, score:{score}")
         if url is None:
             return None
@@ -166,7 +165,7 @@ class RedisLookupServer(LookupServerInterface):
 
             return active_peers
             """
-        active_peers = self.connection.eval(lua_script, ACTIVE_PEERS, int(time.time()), MAX_HEARTBEAT_DELAY)
+        active_peers = self.connection.eval(lua_script, 1, ACTIVE_PEERS, int(time.time()), MAX_HEARTBEAT_DELAY)
         if self.distributed_url not in active_peers:
             logger.error(f"Self url {self.distributed_url} not in active peers")
             return []
