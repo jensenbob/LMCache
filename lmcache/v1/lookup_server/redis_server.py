@@ -82,8 +82,12 @@ class RedisLookupServer(LookupServerInterface):
         
         return {url, score}
         """
+
+        # TODO delete
+        traceback.print_stack()
+
         ret = self.connection.eval(lua_script, 2, key.to_string(), ACTIVE_PEERS, str(int(time.time())), str(MAX_HEARTBEAT_DELAY))
-        logger.debug(f"Redis lus executed. ret:{ret}")
+        logger.debug(f"Redis lus executed. ret:{ret}, key:{key.to_string()}")
         if len(ret) == 0:
             return None
         url = ret[0]
@@ -111,17 +115,22 @@ class RedisLookupServer(LookupServerInterface):
         """
         Perform batched insert in the lookup server.
         """
+
+        # TODO delete
+        traceback.print_stack()
+
         if len(keys) == 0:
             return
 
         assert self.distributed_url is not None
-        logger.debug("Call to batched insert in lookup server")
+        logger.debug(f"Call to batched insert {len(keys)}keys in lookup server ")
 
         # TODO(Jiayi): Optimize this with redis pipe
         pipe = self.connection.pipeline()
         for key in keys:
             pipe.set(key.to_string(), self.distributed_url)
         pipe.execute()
+        logger.debug(f"Batched insert {' '.join(key.to_string() for key in keys)} bind with url:{self.distributed_url} finished")
 
     def remove(self, key: CacheEngineKey):
         """

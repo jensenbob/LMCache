@@ -257,6 +257,7 @@ class LMCacheEngine:
         if self.lookup_server is not None:
             self.lookup_server.batched_insert(keys)
             peers = self.lookup_server.active_peers()
+
             for keys_memory_objs_tuple_list, peer in distribute_tuple_list(list(zip(keys, memory_objs)), peers):
                 keys_tuple, memory_objs_tuple = zip(*keys_memory_objs_tuple_list)
                 keys = list(keys_tuple)
