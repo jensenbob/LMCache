@@ -119,6 +119,8 @@ class RedisLookupServer(LookupServerInterface):
         # TODO delete
         traceback.print_stack()
 
+        start = time.perf_counter()
+
         if len(keys) == 0:
             return
 
@@ -130,7 +132,10 @@ class RedisLookupServer(LookupServerInterface):
         for key in keys:
             pipe.set(key.to_string(), self.distributed_url)
         pipe.execute()
-        logger.debug(f"Batched insert {' '.join(key.to_string() for key in keys)} bind with url:{self.distributed_url} finished")
+
+        end = time.perf_counter()
+        elapse_in_milliseconds = "{:.4f}".format((end - start)*1000)
+        logger.debug(f"Batched insert {' '.join(key.to_string() for key in keys)} bind with url:{self.distributed_url} finished, cost {elapse_in_milliseconds} seconds")
 
     def remove(self, key: CacheEngineKey):
         """

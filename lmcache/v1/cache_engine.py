@@ -262,7 +262,10 @@ class LMCacheEngine:
                 keys_tuple, memory_objs_tuple = zip(*keys_memory_objs_tuple_list)
                 keys = list(keys_tuple)
                 memory_objs = list(memory_objs_tuple)
-                self.distributed_server.batched_issue_sync(keys, memory_objs, peer, "LocalCPUBackend")
+                asyncio.run_coroutine_threadsafe(
+                    self.distributed_server.batched_issue_sync(keys, memory_objs, peer, "LocalCPUBackend"),
+                    self.distributed_loop,
+                )
                 logger.info("send %d keys and %d memory_objs to peer %s", len(keys), len(memory_objs), peer)
 
         logger.info(
