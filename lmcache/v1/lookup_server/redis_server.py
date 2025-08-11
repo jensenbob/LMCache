@@ -1,12 +1,13 @@
 # SPDX-License-Identifier: Apache-2.0
 # Standard
-import os
+import threading
 import time
 from typing import Optional, Sequence, Tuple
 import inspect
 
 # Third Party
 import redis
+import schedule
 
 # First Party
 from lmcache.logging import init_logger
@@ -19,6 +20,11 @@ logger = init_logger(__name__)
 
 ACTIVE_PEERS = "LOCAL_MODEL:LMCACHE:P2P:ACTIVE_PEERS"
 MAX_HEARTBEAT_DELAY = 60  # seconds
+
+def background_heartbeat():
+    while True:
+        schedule.run_pending()
+        time.sleep(5)
 
 # TODO (Jiayi): Batching is needed for Redis lookup server.
 class RedisLookupServer(LookupServerInterface):
@@ -38,6 +44,14 @@ class RedisLookupServer(LookupServerInterface):
         )
         logger.info(f"Connected to Redis lookup server at [{host}]:{port}")
         # decode_responses=False)
+
+        schedule.every(1).seconds.do(self.heartbeat)  # 每3秒执行一次
+        scheduler_thread = threading.Thread(
+            target=background_heartbeat,
+            daemon=True  # 守护线程：主程序退出时自动结束
+        )
+        scheduler_thread.start()
+        logger.info("Started background heartbeat thread")
 
     def lookup(self, key: CacheEngineKey) -> Optional[Tuple[str, int]]:
         """
@@ -81,19 +95,22 @@ class RedisLookupServer(LookupServerInterface):
         assert self.distributed_url is not None
         logger.debug("Call to insert in lookup server")
         self.connection.set(key.to_string(), self.distributed_url)
-        self.heartbeat()
 
     def batched_insert(self, keys: Sequence[CacheEngineKey]):
         """
         Perform batched insert in the lookup server.
         """
+        if len(keys) == 0:
+            return
+
         assert self.distributed_url is not None
         logger.debug("Call to batched insert in lookup server")
 
         # TODO(Jiayi): Optimize this with redis pipe
+        pipe = self.connection.pipeline()
         for key in keys:
-            self.connection.set(key.to_string(), self.distributed_url)
-        self.heartbeat()
+            pipe.set(key.to_string(), self.distributed_url)
+        pipe.execute()
 
     def remove(self, key: CacheEngineKey):
         """
@@ -101,7 +118,6 @@ class RedisLookupServer(LookupServerInterface):
         """
         logger.debug("Call to remove in lookup server")
         self.connection.delete(key.to_string())
-        self.heartbeat()
 
     def batched_remove(self, keys: Sequence[CacheEngineKey]):
         """
@@ -111,7 +127,6 @@ class RedisLookupServer(LookupServerInterface):
         # TODO(Jiayi): We might need to cache the `str_keys` for performance.
         str_keys = [key.to_string() for key in keys]
         self.connection.delete(*str_keys)
-        self.heartbeat()
 
     def heartbeat(self):
         """

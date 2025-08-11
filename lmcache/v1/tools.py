@@ -75,5 +75,5 @@ def parse_ip_port(ip_address:str) -> Tuple[str, int]:
     if not port.isdigit() or not (0 <= int(port) <= 65535):
         raise ValueError(f"illegal port: {port}")
 
-    logger.debug(f"parse ipaddress under ipv6 protocol, {ipv6_address}:{port}")
+    logger.debug(f"parse ipaddress under ipv6 protocol, [{ipv6_address}]:{port}")
     return ipv6_address, int(port)

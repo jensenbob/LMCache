@@ -94,7 +94,6 @@ class LMCacheEngine:
         self.lookup_server: Optional[LookupServerInterface] = None
         if self.enable_p2p:
             self.lookup_server = RedisLookupServer(config)
-            self.report_heartbeat()
 
         # avoid circular import
         # First Party
@@ -157,9 +156,6 @@ class LMCacheEngine:
             logger.info("Post-initializing LMCacheEngine")
             self.gpu_connector.initialize_kvcaches_ptr(**kwargs)
             self.post_inited = True
-
-    def report_heartbeat(self):
-        schedule.every(5).seconds.do(self.lookup_server.heartbeat)
 
     @_lmcache_nvtx_annotate
     @torch.inference_mode()
