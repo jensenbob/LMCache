@@ -74,7 +74,7 @@ class RedisLookupServer(LookupServerInterface):
            end
            return url, score
            """
-        url, score = self.connection.execute_script(lua_script, key.to_string(), ACTIVE_PEERS, int(time.time()), MAX_HEARTBEAT_DELAY)
+        url, score = self.connection.eval(lua_script, key.to_string(), ACTIVE_PEERS, int(time.time()), MAX_HEARTBEAT_DELAY)
         logger.debug(f"Redis lus executed. url:{url}, score:{score}")
         if url is None:
             return None
@@ -133,7 +133,6 @@ class RedisLookupServer(LookupServerInterface):
         Perform update heartbeat for current pod.
         """
         self.connection.zadd(ACTIVE_PEERS, {self.distributed_url: int(time.time())})
-        logger.debug(f"Heartbeat from {self.distributed_url} for {ACTIVE_PEERS} in lookup server")
 
     def active_peers(self) -> Sequence[str]:
         """
@@ -167,7 +166,7 @@ class RedisLookupServer(LookupServerInterface):
 
             return active_peers
             """
-        active_peers = self.connection.execute_script(lua_script, ACTIVE_PEERS, int(time.time()), MAX_HEARTBEAT_DELAY)
+        active_peers = self.connection.eval(lua_script, ACTIVE_PEERS, int(time.time()), MAX_HEARTBEAT_DELAY)
         if self.distributed_url not in active_peers:
             logger.error(f"Self url {self.distributed_url} not in active peers")
             return []
