@@ -2,7 +2,6 @@
 # Standard
 import threading
 import time
-import traceback
 from typing import Optional, Sequence, Tuple
 import inspect
 
@@ -84,9 +83,6 @@ class RedisLookupServer(LookupServerInterface):
         return {url, score}
         """
 
-        # TODO delete
-        traceback.print_stack()
-
         ret = self.connection.eval(lua_script, 2, key.to_string(), ACTIVE_PEERS, str(int(time.time())), str(MAX_HEARTBEAT_DELAY))
         logger.debug(f"Redis lus executed. ret:{ret}, key:{key.to_string()}")
         if len(ret) == 0:
@@ -116,9 +112,6 @@ class RedisLookupServer(LookupServerInterface):
         """
         Perform batched insert in the lookup server.
         """
-
-        # TODO delete
-        traceback.print_stack()
 
         start = time.perf_counter()
 
