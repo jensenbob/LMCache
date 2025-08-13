@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # Standard
 from collections import defaultdict
-from typing import Dict, Generator, List, Optional, Tuple, Union, Sequence
+from typing import Dict, Generator, List, Optional, OrderedDict, Tuple, Union, Sequence
 import asyncio
 import gc
 import multiprocessing
@@ -214,8 +214,16 @@ class LMCacheEngine:
         tot_token_num = 0
         t = time.perf_counter()
 
+        tags = kwargs.get("tags")
+        if tags is not None and len(tags) != 0:
+            assert isinstance(tags, OrderedDict)
+
         for start, end, key in self.token_database.process_tokens(
-            tokens, hashes, offsets, mask
+            tokens,
+            hashes,
+            offsets,
+            mask,
+            tags=tags,
         ):
             assert isinstance(key, CacheEngineKey)
             # Allocate the memory object
@@ -248,7 +256,6 @@ class LMCacheEngine:
         t = time.perf_counter()
 
         transfer_spec = kwargs.get("transfer_spec", None)
-        # store
         self.storage_manager.batched_put(keys, memory_objs, transfer_spec=transfer_spec)
         put_time += time.perf_counter() - t
 
@@ -273,12 +280,13 @@ class LMCacheEngine:
             "throughput: %.4f GB/s; offload_time: %.4f ms, put_time: %.4f ms",
             tot_token_num,
             num_to_store_tokens,
-            tot_kv_size / 1024 ** 3,
+            tot_kv_size / 1024**3,
             tot_time * 1000,
-            tot_kv_size / tot_time / 1024 ** 3,
+            tot_kv_size / tot_time / 1024**3,
             offload_time * 1000,
             put_time * 1000,
         )
+
         self.stats_monitor.on_store_finished(monitor_req_id, tot_token_num)
 
     @_lmcache_nvtx_annotate
@@ -322,8 +330,12 @@ class LMCacheEngine:
         memory_objs = []
         tot_token_num = 0
         kv_dtype = self.metadata.kv_dtype
+        tags = kwargs.get("tags")
+        if tags is not None and len(tags) != 0:
+            assert isinstance(tags, OrderedDict)
+
         for start, end, key in self.token_database.process_tokens(
-            tokens=tokens, mask=mask
+            tokens=tokens, mask=mask, tags=tags
         ):
             assert isinstance(key, CacheEngineKey)
 
@@ -435,8 +447,14 @@ class LMCacheEngine:
         # [(CacheEngineKey, MemoryObj, start, end)]
         reordered_chunks: List[Tuple[CacheEngineKey, MemoryObj, int, int]] = []
 
+        tags = kwargs.get("tags")
+        if tags is not None and len(tags) != 0:
+            assert isinstance(tags, OrderedDict)
+
         for start, end, key in self.token_database.process_tokens(
-            tokens=tokens, mask=mask
+            tokens=tokens,
+            mask=mask,
+            tags=tags,
         ):
             assert isinstance(key, CacheEngineKey)
 
@@ -574,8 +592,14 @@ class LMCacheEngine:
         starts = []
         ends = []
         keys = []
+
+        tags = kwargs.get("tags")
+        if tags is not None and len(tags) != 0:
+            assert isinstance(tags, OrderedDict)
         for start, end, key in self.token_database.process_tokens(
-            tokens=tokens, mask=mask
+            tokens=tokens,
+            mask=mask,
+            tags=tags,
         ):
             assert isinstance(key, CacheEngineKey)
 
@@ -647,12 +671,13 @@ class LMCacheEngine:
         self,
         tokens: Union[torch.Tensor, List[int]],
         mask: Optional[torch.Tensor] = None,
+        tags: OrderedDict = None,
     ) -> None:
         """Launch the prefetching process in the storage manager to load the
         KV to the local CPU memory
         """
         for start, end, key in self.token_database.process_tokens(
-            tokens=tokens, mask=mask
+            tokens=tokens, mask=mask, tags=tags
         ):
             assert isinstance(key, CacheEngineKey)
             self.storage_manager.prefetch(key)
@@ -664,6 +689,7 @@ class LMCacheEngine:
         search_range: Optional[List[str]] = None,
         lookup_id: Optional[str] = None,
         pin: bool = False,
+        tags: OrderedDict = None,
     ) -> int:
         """
         Checks the existence of KV cache of the tokens from the cache engine.
@@ -682,6 +708,7 @@ class LMCacheEngine:
 
         :return: An int indicating how many prefix tokens are cached.
         """
+        self.stats_monitor.on_lookup_request(len(tokens))
         try:
             end = 0
             prev_end = 0
@@ -694,7 +721,9 @@ class LMCacheEngine:
                 search_range is None or "p2p" in search_range
             )
 
-            for start, end, key in self.token_database.process_tokens(tokens=tokens):
+            for start, end, key in self.token_database.process_tokens(
+                tokens=tokens, tags=tags
+            ):
                 assert isinstance(key, CacheEngineKey)
 
                 if self.use_layerwise:
@@ -717,6 +746,7 @@ class LMCacheEngine:
                             self.lookup_pins[lookup_id].extend(key_all_layers)
                         prev_end = end
                         continue
+                    end = prev_end
                     return prev_end
                 else:
                     if self.storage_manager.contains(key, search_range, pin):
@@ -731,11 +761,13 @@ class LMCacheEngine:
                         if self.lookup_server.lookup(key):
                             prev_end = end
                             continue
+                    end = prev_end
                     return prev_end
 
             # all tokens where found, return the maximal end
             return end
         finally:
+            self.stats_monitor.on_lookup_finished(end)
             # vllm lookup sets pin to True
             if pin:
                 self.storage_manager.touch_cache()
@@ -862,6 +894,7 @@ class LMCacheEngine:
         self,
         tokens: Optional[Union[torch.Tensor, List[int]]] = None,
         locations: Optional[List[str]] = None,
+        tags: OrderedDict = None,  # TODO: need to clean by tags
     ) -> int:
         assert isinstance(self.storage_manager, StorageManager)
         # Clear all caches if tokens is None
@@ -871,11 +904,23 @@ class LMCacheEngine:
 
         num_removed = 0
         # Only remove the caches for the given tokens
-        for start, end, key in self.token_database.process_tokens(tokens=tokens):
+        for start, end, key in self.token_database.process_tokens(
+            tokens=tokens, tags=tags
+        ):
             assert isinstance(key, CacheEngineKey)
             removed = self.storage_manager.remove(key, locations)
             num_removed += removed
         return num_removed
+
+    @_lmcache_nvtx_annotate
+    def health(
+        self,
+    ) -> int:
+        """
+        Check the health of the cache engine.
+        return: 0 if healthy, otherwise the error code
+        """
+        return 0 if self.memory_allocator.memcheck() else -1
 
     def close(self) -> None:
         """Close the cache engine and free all the resources"""
