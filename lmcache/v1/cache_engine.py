@@ -262,7 +262,7 @@ class LMCacheEngine:
             tags=tags,
         ):
             # TODO DELETE
-            logger.debug(f"store, start: {start}, end {end}, key: {key}, num_tokens: {end - start}")
+            logger.debug(f"store, start: {start}, end {end}, key: {key.to_string()}, num_tokens: {end - start}")
 
             assert isinstance(key, CacheEngineKey)
             # Allocate the memory object
@@ -473,9 +473,6 @@ class LMCacheEngine:
         :raises: ValueError if the number of Falses in the mask is not a
             multiple of the chunk size.
         """
-
-        # TODO delete
-        logger.debug(f"print request, tokens: {tokens}, mask: {mask}, kwargs: {kwargs}")
 
         if mask is not None:
             num_required_tokens = torch.sum(mask).item()
@@ -1018,7 +1015,7 @@ class LMCacheEngine:
             mask=mask,
             tags=tags,
         ):
-            logger.debug(f"Processing start: {start}, end: {end}, key: {key}")
+            logger.debug(f"Processing start: {start}, end: {end}, key: {key.to_string()}")
             assert isinstance(key, CacheEngineKey)
 
             if key in self.lookup_cache:

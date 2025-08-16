@@ -329,7 +329,7 @@ class StorageManager:
 
         for backend_name, backend in self.storage_backends.items():
             # TODO DELETE
-            logger.debug(f"Checking key {key} in backend {backend_name}, backend: {backend}")
+            logger.debug(f"Checking key {key.to_string()} in backend_name {backend_name}, backend: {backend}")
 
             if search_range and backend_name not in search_range:
                 continue
@@ -339,7 +339,9 @@ class StorageManager:
                 pin = False
 
             if backend.contains(key, pin):
+                logger.debug(f"Key {key.to_string()} found in backend_name {backend_name}")
                 return backend_name
+            logger.debug(f"Key {key.to_string()} not in backend_name {backend_name}, return None")
 
         return None
 
