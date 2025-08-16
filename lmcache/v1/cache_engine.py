@@ -1045,7 +1045,7 @@ class LMCacheEngine:
                             # memory obj
                             break
                         continue
-                    break
+                    continue
 
                 # NOTE: Here we make the assumption that the underlying
                 # storage backend support pin operation, and the memory
