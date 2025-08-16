@@ -20,6 +20,7 @@ from vllm.distributed.kv_transfer.kv_connector.v1.base import (
 )
 from vllm.distributed.parallel_state import (
     get_tensor_model_parallel_rank,
+    get_tp_group,
 )
 from vllm.sampling_params import SamplingParams
 from vllm.utils import cdiv, get_kv_cache_torch_dtype
@@ -500,8 +501,14 @@ def init_lmcache_engine(
             device=device,
             use_mla=use_mla,
         )
+    tpg = get_tp_group()
     engine = LMCacheEngineBuilder.get_or_create(
-        ENGINE_NAME, config, metadata, vllm_gpu_connector
+        ENGINE_NAME,
+        config,
+        metadata,
+        vllm_gpu_connector,
+        tpg.broadcast,
+        tpg.broadcast_object,
     )
 
     return engine
@@ -1124,6 +1131,10 @@ class LMCacheConnectorV1Impl:
 
         meta = LMCacheConnectorMetadata()
 
+        # set and update lookup requests for unpin
+        meta.lookup_requests_in_step = self._lookup_requests_in_step
+        self._lookup_requests_in_step = []
+
         for finished_req_id in scheduler_output.finished_req_ids:
             self._request_trackers.pop(finished_req_id, None)
             self._unfinished_requests.pop(finished_req_id, None)
@@ -1209,8 +1220,6 @@ class LMCacheConnectorV1Impl:
             if req_meta is not None:
                 meta.add_request(req_meta)
 
-        meta.lookup_requests_in_step = self._lookup_requests_in_step
-        self._lookup_requests_in_step = []
         return meta
 
     @_lmcache_nvtx_annotate
