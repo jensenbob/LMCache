@@ -225,6 +225,9 @@ class LMCacheEngine:
             mask,
             tags=tags,
         ):
+            # TODO DELETE
+            logger.debug(f"store, start: {start}, end {end}, key: {key}, num_tokens: {end - start}")
+
             assert isinstance(key, CacheEngineKey)
             # Allocate the memory object
             num_tokens = end - start
@@ -250,6 +253,7 @@ class LMCacheEngine:
         # memory_objs might be empty, directly return to avoid sending tokens
         if not memory_objs:
             return
+        # store the memory objects from gpu to the storage backend
         self.gpu_connector.batched_from_gpu(memory_objs, starts, ends, **kwargs)
         offload_time += time.perf_counter() - t
 
@@ -262,9 +266,10 @@ class LMCacheEngine:
         tot_time = offload_time + put_time
 
         if self.lookup_server is not None:
+            # record in lookup server the url of the pod store the keys
             self.lookup_server.batched_insert(keys)
-            peers = self.lookup_server.active_peers()
 
+            peers = self.lookup_server.active_peers()
             for keys_memory_objs_tuple_list, peer in distribute_tuple_list(list(zip(keys, memory_objs)), peers):
                 keys_tuple, memory_objs_tuple = zip(*keys_memory_objs_tuple_list)
                 keys = list(keys_tuple)
@@ -432,6 +437,10 @@ class LMCacheEngine:
         :raises: ValueError if the number of Falses in the mask is not a
             multiple of the chunk size.
         """
+
+        # TODO delete
+        logger.debug(f"print request, tokens: {tokens}, mask: {mask}, kwargs: {kwargs}")
+
         if mask is not None:
             num_required_tokens = torch.sum(mask).item()
         else:
@@ -458,6 +467,9 @@ class LMCacheEngine:
         ):
             assert isinstance(key, CacheEngineKey)
 
+            # DELETE
+            logger.debug(f"retrieve key: {key}, start: {start}, end: {end}, key: {key}")
+
             if key in self.lookup_cache:
                 # TODO(Jiayi): we can reduce the number of `contains` calls
                 # by checking the lookup cache first (should be updated in `lookup`)
@@ -465,11 +477,16 @@ class LMCacheEngine:
             else:
                 # NOTE: key should always be in the lookup cache once
                 # we support it.
+
+                # Just to find the location of key, either LocalCPUBackend or P2P,
+                # not actual get the value.
                 location = self.storage_manager.contains(key)
+                logger.debug(f"location expected: LocalCPUBackend, actual {location}")
                 if location is None:
                     # TODO(Jiayi): Need to refactor P2P as a storage backend to
                     # clean up the following code.
                     if self.enable_p2p:
+                        logger.debug(f"Location is None. Retrieving {key} from P2P")
                         future_memory_obj = asyncio.run_coroutine_threadsafe(
                             self.distributed_server.issue_get(key),
                             self.distributed_loop,
@@ -496,6 +513,7 @@ class LMCacheEngine:
 
         # TODO(Jiayi): We can parallelize the retrieval from
         # different storage backends.
+        # The actual logic to find the value of key from location(CPU or P2P) correspondingly
         last_failed_block_start = None
         for location, blocks in block_mapping.items():
             keys = [key for key, _, _ in blocks]
@@ -505,7 +523,7 @@ class LMCacheEngine:
             )
             for (key, start, end), memory_obj in zip(blocks, memory_objs, strict=False):
                 if memory_obj is None:
-                    logger.warn(
+                    logger.warning(
                         "The cache block is in the storage, but it can't be retrieved"
                     )
                     if (
@@ -534,6 +552,7 @@ class LMCacheEngine:
             self.gpu_connector.batched_to_gpu(
                 list(memory_objs), list(starts), list(ends), **kwargs
             )
+            logger.debug(f"save to gpu {len(reordered_chunks)} chunks")
 
         # TODO(Jiayi): Remove the following for loop with batched operations
         for key, memory_obj, _, _ in reordered_chunks:

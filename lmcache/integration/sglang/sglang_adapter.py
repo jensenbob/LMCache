@@ -121,6 +121,8 @@ class LMCacheConnector:
         assert isinstance(slot_mapping, torch.Tensor)
         assert (len(token_ids) - offset) == len(slot_mapping)
 
+        logger.debug(f"SGLang begin Loading {len(token_ids)} tokens with offset:{offset}")
+
         slot_mapping = slot_mapping.cuda()
         load_mask = torch.ones_like(token_ids, dtype=torch.bool)
         load_mask[:offset] = False
@@ -134,7 +136,7 @@ class LMCacheConnector:
         )
 
         num_retrieved_tokens = ret_token_mask.sum().item()
-
+        logger.debug(f"SGLang num retrieved tokens:{num_retrieved_tokens}, total:{len(token_ids)}, cached_ratio:{num_retrieved_tokens/len(token_ids):.4f}")
         return num_retrieved_tokens
 
     def store_kv(

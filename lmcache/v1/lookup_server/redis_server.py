@@ -45,7 +45,7 @@ class RedisLookupServer(LookupServerInterface):
         logger.info(f"Connected to Redis lookup server at [{host}]:{port}")
         # decode_responses=False)
 
-        schedule.every(1).seconds.do(self.heartbeat)  # 每3秒执行一次
+        schedule.every(5).seconds.do(self.heartbeat)  # 每3秒执行一次
         scheduler_thread = threading.Thread(
             target=background_heartbeat,
             daemon=True  # 守护线程：主程序退出时自动结束
@@ -129,7 +129,7 @@ class RedisLookupServer(LookupServerInterface):
 
         end = time.perf_counter()
         elapse_in_milliseconds = "{:.4f}".format((end - start)*1000)
-        logger.debug(f"Batched insert {' '.join(key.to_string() for key in keys)} bind with url:{self.distributed_url} finished, cost {elapse_in_milliseconds} seconds")
+        logger.debug(f"Batched insert {' '.join(key.to_string() for key in keys)} bind with url:{self.distributed_url} finished, cost {elapse_in_milliseconds} milliseconds")
 
     def remove(self, key: CacheEngineKey):
         """
