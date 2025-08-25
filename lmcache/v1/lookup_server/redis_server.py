@@ -6,7 +6,6 @@ from typing import Optional, Sequence, Tuple
 import inspect
 
 # Third Party
-import redis
 import schedule
 
 # First Party
@@ -15,6 +14,7 @@ from lmcache.utils import CacheEngineKey
 from lmcache.v1.config import LMCacheEngineConfig
 from lmcache.v1.lookup_server.abstract_server import LookupServerInterface  # noqa: E501
 from lmcache.v1.tools import parse_ip_port
+from lmcache.v1.byte_redis import ByteRedis
 
 logger = init_logger(__name__)
 
@@ -39,11 +39,8 @@ class RedisLookupServer(LookupServerInterface):
         self.host = host
         self.port = int(port)
 
-        self.connection = redis.Redis(
-            host=self.host, port=self.port, decode_responses=True
-        )
-        logger.info(f"Connected to Redis lookup server at [{host}]:{port}")
-        # decode_responses=False)
+        self.connection = ByteRedis.get_conn()
+        logger.info(f"Connected to Redis lookup server at {ByteRedis.get_psm()}")
 
         schedule.every(5).seconds.do(self.heartbeat)  # 每3秒执行一次
         scheduler_thread = threading.Thread(
